@@ -1,0 +1,46 @@
+# Sentinel Guard Configuration
+# Copy this to sentinel.toml and customize
+
+[watch]
+# Directories to monitor for file access
+paths = ["."]
+# Watch subdirectories too
+recursive = true
+
+[protect]
+# File patterns that are considered sensitive
+# Any access to these files will trigger an alert
+sensitive_patterns = [
+    "**/.env",
+    "**/.env.*",
+    "**/*.pem",
+    "**/*.key",
+    "**/id_rsa",
+    "**/id_ed25519",
+    "**/.ssh/*",
+    "**/credentials*",
+    "**/secrets*",
+    "**/.aws/*",
+    "**/.gcloud/*",
+    "**/token*",
+    "**/*.pfx",
+    "**/*.p12",
+    "**/.npmrc",
+    "**/.pypirc",
+    "**/.netrc",
+    "**/wp-config.php",
+    "**/.htpasswd",
+    "**/*.jks",
+]
+
+[alert]
+# Alert mode: "log", "terminal", or "all"
+mode = "all"
+# Action when sensitive file is accessed: "warn" or "block"
+action = "warn"
+
+[log]
+# Where to store the activity database
+db_path = "~/.sentinel-guard/activity.db"
+# How many days to keep logs
+retention_days = 30
