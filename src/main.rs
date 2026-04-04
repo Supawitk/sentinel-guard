@@ -109,10 +109,17 @@ fn main() -> Result<()> {
     let command = match cli.command {
         Some(cmd) => cmd,
         None => {
-            // No args = launch interactive dashboard
-            let config = load_config(&cli.config);
-            output::dashboard::run(&config)?;
-            return Ok(());
+            // No args = launch interactive command picker
+            match output::launcher::run_launcher()? {
+                Some(cmd_str) => {
+                    // Re-run sentinel with the selected command
+                    let exe = std::env::current_exe()?;
+                    let args: Vec<&str> = cmd_str.split_whitespace().collect();
+                    let status = std::process::Command::new(&exe).args(&args).status()?;
+                    std::process::exit(status.code().unwrap_or(0));
+                }
+                None => return Ok(()), // user quit
+            }
         }
     };
 
