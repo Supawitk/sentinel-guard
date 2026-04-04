@@ -1,6 +1,6 @@
 [package]
 name = "sentinel-guard"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 description = "Lightweight AI agent file access monitor and guardian. Protects sensitive files from AI agents like OpenClaw, Claude Code, Cursor, and Copilot."
 authors = ["supawitk <supawitk@yahoo.com>"]
@@ -55,6 +55,9 @@ ureq = { version = "3", features = ["json"] }
 # Terminal UI dashboard
 ratatui = "0.29"
 crossterm = "0.28"
+
+# Process detection
+sysinfo = "0.33"
 
 # Terminal detection
 atty = "0.2"

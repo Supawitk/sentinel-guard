@@ -70,6 +70,30 @@ enum Commands {
         #[arg(short = 'd', long)] deep: bool,
     },
 
+    // ── Protection ───────────────────────────
+    /// Show which AI agents are currently running
+    Agents,
+    /// Plant honeypot/canary files to detect unauthorized access
+    Honeypot {
+        #[arg(default_value = ".")] path: String,
+        /// Remove honeypots instead of planting
+        #[arg(long)] remove: bool,
+    },
+    /// Move sensitive files to a protected vault
+    Vault {
+        /// File to quarantine (or "list" to show vault contents)
+        #[arg(default_value = "list")] action: String,
+    },
+    /// Restore a file from the vault
+    VaultRestore {
+        /// Vault entry name to restore
+        name: String,
+    },
+    /// Auto-quarantine all sensitive files in a directory
+    AutoVault {
+        #[arg(default_value = ".")] path: String,
+    },
+
     // ── Maintenance ─────────────────────────
     /// Clean up old log entries
     Cleanup { #[arg(short, long)] days: Option<u32> },
@@ -99,6 +123,10 @@ fn main() -> Result<()> {
             println!("  {}   sentinel stats               Event statistics", "     ".cyan());
             println!("  {}   sentinel dashboard            TUI dashboard", "     ".cyan());
             println!("  {}   sentinel report . -o x.csv   Export report", "     ".cyan());
+            println!("  {} sentinel agents              Show running AI agents", "Shield".cyan());
+            println!("  {}   sentinel honeypot .          Plant decoy files", "      ".cyan());
+            println!("  {}   sentinel vault <file>        Quarantine a file", "      ".cyan());
+            println!("  {}   sentinel auto-vault .        Auto-quarantine all", "      ".cyan());
             println!();
             println!("  Run {} for more details on any command.", "sentinel <command> --help".yellow());
             println!();
@@ -239,6 +267,50 @@ fn main() -> Result<()> {
         }
 
         // ── Maintenance ───────────────
+        // ── Protection ──────────────
+        Commands::Agents => {
+            let mut detector = monitor::agents::AgentDetector::new();
+            let agents = detector.detect();
+            if agents.is_empty() {
+                println!("  {}", "No AI agents detected running.".dimmed());
+            } else {
+                println!("  {} ({} found)\n", "Running AI Agents".white().bold(), agents.len());
+                for a in &agents {
+                    println!("  {} {} (PID: {})", "->".green(), a.name.cyan().bold(), a.pid);
+                    println!("     Process: {}", a.process_name.dimmed());
+                }
+            }
+        }
+
+        Commands::Honeypot { path, remove } => {
+            let dir = PathBuf::from(&path);
+            if remove {
+                detect::honeypot::cleanup(&dir)?;
+            } else {
+                detect::honeypot::plant(&dir, None)?;
+            }
+        }
+
+        Commands::Vault { action } => {
+            if action == "list" {
+                detect::vault::list_vault();
+            } else {
+                detect::vault::quarantine(&PathBuf::from(&action))?;
+            }
+        }
+
+        Commands::VaultRestore { name } => {
+            detect::vault::restore(&name)?;
+        }
+
+        Commands::AutoVault { path } => {
+            let config = load_config(&cli.config);
+            println!("  Auto-quarantining sensitive files in {}...\n", path.white().bold());
+            let count = detect::vault::auto_quarantine(&PathBuf::from(&path), &config.protect.sensitive_patterns)?;
+            println!("\n  {} {} file(s) moved to vault", "Done.".green().bold(), count);
+        }
+
+        // ── Maintenance ───────────
         Commands::Cleanup { days } => {
             let config = load_config(&cli.config);
             let db = core::db::ActivityDb::open(&config.db_path())?;

@@ -17,7 +17,12 @@ pub fn watch(config: &Config) -> Result<()> {
     let alert_mgr = alerts::AlertManager::new(&config.alert.mode);
     let webhook_mgr = webhook::WebhookManager::new(&config.webhooks);
     let desktop = notifier::Notifier::new(config.alert.desktop_notifications);
+    let mut agent_detector = crate::monitor::agents::AgentDetector::new();
     let db = ActivityDb::open(&config.db_path())?;
+
+    // Show running AI agents at startup
+    let agents = agent_detector.running_agents_str();
+    tracing::info!("Active AI agents: {}", agents);
 
     let (tx, rx) = mpsc::channel::<notify_crate::Result<Event>>();
     let mut watcher = notify_crate::recommended_watcher(tx)?;
@@ -35,7 +40,7 @@ pub fn watch(config: &Config) -> Result<()> {
 
     for event in rx {
         match event {
-            Ok(event) => handle_event(&event, &rules, &alert_mgr, &webhook_mgr, &desktop, &db),
+            Ok(event) => handle_event(&event, &rules, &alert_mgr, &webhook_mgr, &desktop, &mut agent_detector, &db),
             Err(e) => tracing::error!("Watch error: {}", e),
         }
     }
@@ -48,6 +53,7 @@ fn handle_event(
     alert_mgr: &alerts::AlertManager,
     webhook_mgr: &webhook::WebhookManager,
     desktop: &notifier::Notifier,
+    agent_detector: &mut crate::monitor::agents::AgentDetector,
     db: &ActivityDb,
 ) {
     let event_type = match event.kind {
@@ -61,7 +67,13 @@ fn handle_event(
     for path in &event.paths {
         let result = rules.evaluate(path, event_type);
         let is_sensitive = result.action != Action::Allow;
-        let _ = db.log_event(event_type, &path.to_string_lossy(), is_sensitive, &result.reason);
+        let agents = if is_sensitive { agent_detector.running_agents_str() } else { String::new() };
+        let detail = if agents.is_empty() || agents == "none detected" {
+            result.reason.clone()
+        } else {
+            format!("{} [agents: {}]", result.reason, agents)
+        };
+        let _ = db.log_event(event_type, &path.to_string_lossy(), is_sensitive, &detail);
         if is_sensitive {
             alert_mgr.alert(path, event_type, &result);
             desktop.notify(path, event_type, &result);

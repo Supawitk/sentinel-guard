@@ -50,9 +50,21 @@ sentinel report . -o report.csv  # Export to CSV
 sentinel report . -t log -o x.csv  # Export activity log
 ```
 
+### Protection
+```bash
+sentinel agents                  # Show running AI agents (Claude, Cursor, Copilot...)
+sentinel honeypot .              # Plant fake .env/wallet/key decoy files
+sentinel honeypot . --remove     # Remove planted honeypots
+sentinel vault <file>            # Quarantine a sensitive file
+sentinel vault list              # Show vault contents
+sentinel vault-restore <name>    # Restore from vault
+sentinel auto-vault .            # Auto-quarantine all sensitive files
+```
+
 ### Maintenance
 ```bash
 sentinel cleanup --days 7        # Remove old log entries
+sentinel check                   # Verify installation
 ```
 
 ## Config
@@ -97,10 +109,10 @@ enabled = false
 ```
 src/
 ├── core/       Config, database, shared types
-├── detect/     Secret scanner, skill scanner, integrity checker
-├── monitor/    File watcher, rules engine, agent hooks
+├── detect/     Scanner, skills, integrity, vault, honeypot
+├── monitor/    Watcher, rules, agent detection, hooks
 ├── output/     Alerts, dashboard, notifications, webhooks, reports
-└── main.rs     CLI commands
+└── main.rs     18 CLI commands
 ```
 
 ## License
