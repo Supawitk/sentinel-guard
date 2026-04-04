@@ -1,0 +1,64 @@
+[package]
+name = "sentinel-guard"
+version = "0.7.0"
+edition = "2024"
+description = "Lightweight AI agent file access monitor and guardian. Protects sensitive files from AI agents like OpenClaw, Claude Code, Cursor, and Copilot."
+authors = ["supawitk <supawitk@yahoo.com>"]
+license = "MIT"
+repository = "https://github.com/Supawitk/sentinel-guard"
+
+[[bin]]
+name = "sentinel"
+path = "src/main.rs"
+
+[dependencies]
+# File watching
+notify = "8"
+notify-debouncer-mini = "0.5"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Database
+rusqlite = { version = "0.34", features = ["bundled"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Regex for secret detection
+regex = "1"
+
+# Cross-platform paths
+dirs = "6"
+
+# Colors for CLI output
+colored = "3"
+
+# Glob patterns for rules
+globset = "0.4"
+
+# Directory walking
+walkdir = "2"
+
+# HTTP client for webhooks
+ureq = { version = "3", features = ["json"] }
+
+# Terminal UI dashboard
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Terminal detection
+atty = "0.2"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
