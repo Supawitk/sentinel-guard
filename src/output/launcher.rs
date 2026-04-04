@@ -14,162 +14,146 @@ use ratatui::{
 };
 use std::io::stdout;
 
-struct Command {
+// ── Command definitions ──
+
+struct Cmd {
     name: &'static str,
     args: &'static str,
-    group: &'static str,
+    short_desc: &'static str,
     desc: &'static str,
     warning: &'static str,
     needs_confirm: bool,
 }
 
-const COMMANDS: &[Command] = &[
-    // Setup
-    Command { name: "init", args: "", group: "Setup", desc: "Generate a default sentinel.toml config file in current directory", warning: "", needs_confirm: false },
-    Command { name: "check", args: "", group: "Setup", desc: "Run self-check to verify binary, config, database, and scanner are working", warning: "", needs_confirm: false },
-    // Scanning
-    Command { name: "scan", args: ".", group: "Scan", desc: "Scan current directory for sensitive files matching known patterns (.env, keys, wallets, etc.)", warning: "Pattern-only scan. Use --deep to also check file contents for secrets.", needs_confirm: false },
-    Command { name: "scan", args: ". --deep", group: "Scan", desc: "Deep scan — checks filenames AND file contents for 26+ secret patterns (API keys, tokens, passwords, crypto keys)", warning: "Reads file contents. May be slow on large directories.", needs_confirm: false },
-    Command { name: "skill-scan", args: ".", group: "Scan", desc: "Scan for AI agent SKILL.md files and check for malicious patterns (data exfil, RCE, credential theft)", warning: "", needs_confirm: false },
-    // Monitoring
-    Command { name: "watch", args: ".", group: "Monitor", desc: "Start real-time file monitoring. Alerts when sensitive files are accessed, created, or modified", warning: "Runs continuously until Ctrl+C. Logs which AI agents are active during events.", needs_confirm: false },
-    Command { name: "agents", args: "", group: "Monitor", desc: "Show which AI coding agents are currently running (Claude Code, Cursor, VS Code, OpenClaw, etc.)", warning: "", needs_confirm: false },
-    // Integrity
-    Command { name: "baseline", args: ".", group: "Integrity", desc: "Create hash snapshot of all sensitive files. Used to detect tampering later with 'verify'", warning: "Creates .sentinel-hashes.json in the target directory.", needs_confirm: false },
-    Command { name: "verify", args: ".", group: "Integrity", desc: "Compare current sensitive files against baseline hashes. Shows modified, deleted, and new files", warning: "Requires a baseline to exist. Run 'baseline' first.", needs_confirm: false },
-    // Protection
-    Command { name: "honeypot", args: ".", group: "Protect", desc: "Plant fake .env, wallet, SSH key, and AWS credential files as tripwires. Any access triggers alerts", warning: "Creates decoy files in your directory. Use --remove to clean up.", needs_confirm: true },
-    Command { name: "auto-vault", args: ".", group: "Protect", desc: "Automatically find and quarantine ALL sensitive files to a protected vault", warning: "THIS MOVES FILES! They will be removed from their original location. Use 'vault-restore' to recover.", needs_confirm: true },
-    Command { name: "vault", args: "list", group: "Protect", desc: "Show all files currently stored in the quarantine vault", warning: "", needs_confirm: false },
-    // Reporting
-    Command { name: "dashboard", args: "", group: "Report", desc: "Open interactive TUI with live events, agent detection, and alert panels", warning: "", needs_confirm: false },
-    Command { name: "log", args: "", group: "Report", desc: "View recent activity log entries from the SQLite database", warning: "", needs_confirm: false },
-    Command { name: "log", args: "--sensitive", group: "Report", desc: "View only sensitive/alert events from the activity log", warning: "", needs_confirm: false },
-    Command { name: "stats", args: "", group: "Report", desc: "Show total events, sensitive events, and today's event count", warning: "", needs_confirm: false },
-    Command { name: "report", args: ". -o report.csv", group: "Report", desc: "Export scan results to CSV or TXT file for sharing or compliance", warning: "", needs_confirm: false },
-    // Maintenance
-    Command { name: "cleanup", args: "--days 7", group: "Maintain", desc: "Remove activity log entries older than specified days", warning: "Deletes log data permanently.", needs_confirm: true },
+struct Group {
+    name: &'static str,
+    icon: &'static str,
+    color: Color,
+    commands: &'static [Cmd],
+}
+
+const GROUPS: &[Group] = &[
+    Group { name: "Setup", icon: ">", color: Color::Green, commands: &[
+        Cmd { name: "init", args: "", short_desc: "Generate config", desc: "Generate a default sentinel.toml config file", warning: "", needs_confirm: false },
+        Cmd { name: "check", args: "", short_desc: "Self-check", desc: "Verify binary, config, database, and scanner", warning: "", needs_confirm: false },
+    ]},
+    Group { name: "Scan", icon: "#", color: Color::Cyan, commands: &[
+        Cmd { name: "scan", args: ".", short_desc: "Quick scan", desc: "Find sensitive files by pattern (.env, keys, wallets)", warning: "", needs_confirm: false },
+        Cmd { name: "scan", args: ". --deep", short_desc: "Deep scan", desc: "Scan filenames + file contents for 26+ secret types", warning: "May be slow on large directories", needs_confirm: false },
+        Cmd { name: "skill-scan", args: ".", short_desc: "Skill scan", desc: "Check AI agent skills for malicious patterns", warning: "", needs_confirm: false },
+    ]},
+    Group { name: "Monitor", icon: "~", color: Color::Yellow, commands: &[
+        Cmd { name: "watch", args: ".", short_desc: "Watch files", desc: "Real-time monitoring with AI agent attribution", warning: "Runs until Ctrl+C", needs_confirm: false },
+        Cmd { name: "agents", args: "", short_desc: "AI agents", desc: "Show running AI agents (Claude, Cursor, Copilot...)", warning: "", needs_confirm: false },
+    ]},
+    Group { name: "Integrity", icon: "=", color: Color::Blue, commands: &[
+        Cmd { name: "baseline", args: ".", short_desc: "Baseline", desc: "Hash sensitive files for later verification", warning: "Creates .sentinel-hashes.json", needs_confirm: false },
+        Cmd { name: "verify", args: ".", short_desc: "Verify", desc: "Check files against baseline for tampering", warning: "Run 'baseline' first", needs_confirm: false },
+    ]},
+    Group { name: "Protect", icon: "!", color: Color::Red, commands: &[
+        Cmd { name: "honeypot", args: ".", short_desc: "Honeypot", desc: "Plant decoy .env/wallet/key files as tripwires", warning: "Creates fake files in directory", needs_confirm: true },
+        Cmd { name: "auto-vault", args: ".", short_desc: "Auto-vault", desc: "Quarantine ALL sensitive files to vault", warning: "MOVES files from original location!", needs_confirm: true },
+        Cmd { name: "vault", args: "list", short_desc: "Vault list", desc: "Show quarantined files", warning: "", needs_confirm: false },
+    ]},
+    Group { name: "Report", icon: "*", color: Color::Magenta, commands: &[
+        Cmd { name: "dashboard", args: "", short_desc: "Dashboard", desc: "Interactive TUI with live events and agents", warning: "", needs_confirm: false },
+        Cmd { name: "log", args: "--sensitive", short_desc: "Alerts log", desc: "View sensitive/alert events only", warning: "", needs_confirm: false },
+        Cmd { name: "stats", args: "", short_desc: "Statistics", desc: "Event counts and database info", warning: "", needs_confirm: false },
+        Cmd { name: "report", args: ". -o report.csv", short_desc: "Export CSV", desc: "Export findings to CSV/TXT", warning: "", needs_confirm: false },
+        Cmd { name: "cleanup", args: "--days 7", short_desc: "Cleanup", desc: "Remove old log entries", warning: "Deletes log data", needs_confirm: true },
+    ]},
 ];
 
-struct LauncherState {
-    list_state: ListState,
+// ── State ──
+
+struct State {
+    group_idx: usize,
+    cmd_idx: usize,
     filter: String,
     filter_mode: bool,
     show_confirm: bool,
     selected_cmd: Option<String>,
 }
 
-impl LauncherState {
+impl State {
     fn new() -> Self {
-        let mut ls = ListState::default();
-        ls.select(Some(0));
-        Self { list_state: ls, filter: String::new(), filter_mode: false, show_confirm: false, selected_cmd: None }
+        Self { group_idx: 0, cmd_idx: 0, filter: String::new(), filter_mode: false, show_confirm: false, selected_cmd: None }
     }
 
-    fn filtered_commands(&self) -> Vec<&Command> {
-        if self.filter.is_empty() {
-            COMMANDS.iter().collect()
-        } else {
-            let f = self.filter.to_lowercase();
-            COMMANDS.iter().filter(|c| {
-                c.name.to_lowercase().contains(&f) || c.group.to_lowercase().contains(&f)
-                    || c.desc.to_lowercase().contains(&f)
-            }).collect()
-        }
+    fn current_group(&self) -> &'static Group { &GROUPS[self.group_idx] }
+    fn current_cmd(&self) -> &'static Cmd { &self.current_group().commands[self.cmd_idx] }
+
+    fn cmd_string(&self) -> String {
+        let cmd = self.current_cmd();
+        if cmd.args.is_empty() { cmd.name.to_string() } else { format!("{} {}", cmd.name, cmd.args) }
     }
 
-    fn move_selection(&mut self, delta: isize) {
-        let len = self.filtered_commands().len();
-        if len == 0 { return; }
-        let cur = self.list_state.selected().unwrap_or(0) as isize;
-        let next = (cur + delta).clamp(0, len as isize - 1) as usize;
-        self.list_state.select(Some(next));
+    fn move_group(&mut self, delta: isize) {
+        let len = GROUPS.len() as isize;
+        self.group_idx = ((self.group_idx as isize + delta).rem_euclid(len)) as usize;
+        self.cmd_idx = 0;
     }
 
-    fn selected(&self) -> Option<&Command> {
-        let cmds = self.filtered_commands();
-        self.list_state.selected().and_then(|i| cmds.get(i).copied())
+    fn move_cmd(&mut self, delta: isize) {
+        let len = self.current_group().commands.len() as isize;
+        self.cmd_idx = ((self.cmd_idx as isize + delta).rem_euclid(len)) as usize;
     }
 }
 
-/// Returns the command string to execute, or None if user quit
+// ── Entry point ──
+
 pub fn run_launcher() -> Result<Option<String>> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-    let mut state = LauncherState::new();
+    let mut state = State::new();
 
     let result = run_loop(&mut terminal, &mut state);
 
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
-
     result
 }
 
-fn run_loop(
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    state: &mut LauncherState,
-) -> Result<Option<String>> {
+fn run_loop(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>, state: &mut State) -> Result<Option<String>> {
     loop {
-        terminal.draw(|frame| draw_launcher(frame, state))?;
+        terminal.draw(|frame| draw(frame, state))?;
 
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press { continue; }
 
-            // Confirm dialog
             if state.show_confirm {
                 match key.code {
-                    KeyCode::Char('y') | KeyCode::Enter => {
-                        let cmd = state.selected_cmd.take();
-                        state.show_confirm = false;
-                        return Ok(cmd);
-                    }
-                    _ => {
-                        state.show_confirm = false;
-                        state.selected_cmd = None;
-                    }
-                }
-                continue;
-            }
-
-            // Filter mode
-            if state.filter_mode {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Enter => state.filter_mode = false,
-                    KeyCode::Backspace => { state.filter.pop(); state.list_state.select(Some(0)); }
-                    KeyCode::Char(c) => { state.filter.push(c); state.list_state.select(Some(0)); }
-                    _ => {}
+                    KeyCode::Char('y') | KeyCode::Enter => { state.show_confirm = false; return Ok(state.selected_cmd.take()); }
+                    _ => { state.show_confirm = false; state.selected_cmd = None; }
                 }
                 continue;
             }
 
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => return Ok(None),
-                KeyCode::Up | KeyCode::Char('k') => state.move_selection(-1),
-                KeyCode::Down | KeyCode::Char('j') => state.move_selection(1),
-                KeyCode::Home => state.list_state.select(Some(0)),
-                KeyCode::End => {
-                    let len = state.filtered_commands().len();
-                    if len > 0 { state.list_state.select(Some(len - 1)); }
-                }
-                KeyCode::PageUp => state.move_selection(-5),
-                KeyCode::PageDown => state.move_selection(5),
-                KeyCode::Char('/') => { state.filter_mode = true; state.filter.clear(); }
-                KeyCode::Char('c') => { state.filter.clear(); state.list_state.select(Some(0)); }
+                // Navigate between groups
+                KeyCode::Tab | KeyCode::Right => state.move_group(1),
+                KeyCode::BackTab | KeyCode::Left => state.move_group(-1),
+                // Navigate within group
+                KeyCode::Up | KeyCode::Char('k') => state.move_cmd(-1),
+                KeyCode::Down | KeyCode::Char('j') => state.move_cmd(1),
+                // Quick jump to group by number
+                KeyCode::Char('1') => { state.group_idx = 0; state.cmd_idx = 0; }
+                KeyCode::Char('2') => { state.group_idx = 1; state.cmd_idx = 0; }
+                KeyCode::Char('3') => { state.group_idx = 2; state.cmd_idx = 0; }
+                KeyCode::Char('4') => { state.group_idx = 3; state.cmd_idx = 0; }
+                KeyCode::Char('5') => { state.group_idx = 4; state.cmd_idx = 0; }
+                KeyCode::Char('6') => { state.group_idx = 5; state.cmd_idx = 0; }
+                // Run
                 KeyCode::Enter => {
-                    if let Some(cmd) = state.selected() {
-                        let full_cmd = if cmd.args.is_empty() {
-                            cmd.name.to_string()
-                        } else {
-                            format!("{} {}", cmd.name, cmd.args)
-                        };
-                        if cmd.needs_confirm {
-                            state.show_confirm = true;
-                            state.selected_cmd = Some(full_cmd);
-                        } else {
-                            return Ok(Some(full_cmd));
-                        }
+                    let cmd = state.current_cmd();
+                    let full = state.cmd_string();
+                    if cmd.needs_confirm {
+                        state.show_confirm = true;
+                        state.selected_cmd = Some(full);
+                    } else {
+                        return Ok(Some(full));
                     }
                 }
                 _ => {}
@@ -178,122 +162,152 @@ fn run_loop(
     }
 }
 
-fn draw_launcher(frame: &mut ratatui::Frame, state: &LauncherState) {
-    let chunks = Layout::default().direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(8), Constraint::Length(8), Constraint::Length(2)])
+// ── Drawing ──
+
+fn draw(frame: &mut ratatui::Frame, state: &State) {
+    let main_chunks = Layout::default().direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),   // Header
+            Constraint::Min(10),    // Grid
+            Constraint::Length(7),   // Detail panel
+            Constraint::Length(2),   // Footer
+        ])
         .split(frame.area());
 
-    // Header
+    // ── Header ──
     let header = Paragraph::new(Line::from(vec![
         Span::styled(" Sentinel Guard ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("— Select a command to run", Style::default().fg(Color::DarkGray)),
+        Span::styled("v0.8", Style::default().fg(Color::DarkGray)),
+        Span::styled("  |  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("←→/Tab", Style::default().fg(Color::Yellow)),
+        Span::styled(" group  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("↑↓", Style::default().fg(Color::Yellow)),
+        Span::styled(" command  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Enter", Style::default().fg(Color::Yellow)),
+        Span::styled(" run  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("1-6", Style::default().fg(Color::Yellow)),
+        Span::styled(" jump  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("q", Style::default().fg(Color::Yellow)),
+        Span::styled(" quit", Style::default().fg(Color::DarkGray)),
     ])).block(Block::default().borders(Borders::ALL));
-    frame.render_widget(header, chunks[0]);
+    frame.render_widget(header, main_chunks[0]);
 
-    // Command list
-    let cmds = state.filtered_commands();
-    let mut last_group = "";
-    let items: Vec<ListItem> = cmds.iter().map(|cmd| {
-        let group_label = if cmd.group != last_group {
-            last_group = cmd.group;
-            format!("[{}] ", cmd.group)
+    // ── Grid: 2 rows x 3 columns ──
+    let rows = Layout::default().direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(main_chunks[1]);
+
+    let top_cols = Layout::default().direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+        .split(rows[0]);
+
+    let bot_cols = Layout::default().direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+        .split(rows[1]);
+
+    let grid_areas = [top_cols[0], top_cols[1], top_cols[2], bot_cols[0], bot_cols[1], bot_cols[2]];
+
+    for (i, group) in GROUPS.iter().enumerate() {
+        let is_active = i == state.group_idx;
+        let border_style = if is_active {
+            Style::default().fg(group.color).add_modifier(Modifier::BOLD)
         } else {
-            "       ".to_string()
+            Style::default().fg(Color::DarkGray)
         };
 
-        let warn_indicator = if cmd.needs_confirm {
-            Span::styled(" ⚠", Style::default().fg(Color::Yellow))
-        } else {
-            Span::raw("")
-        };
+        let title = format!(" {}:{} {} ", i + 1, group.icon, group.name);
+        let block = Block::default()
+            .title(title)
+            .title_style(if is_active { Style::default().fg(group.color).add_modifier(Modifier::BOLD) } else { Style::default().fg(Color::DarkGray) })
+            .borders(Borders::ALL)
+            .border_style(border_style);
 
-        ListItem::new(Line::from(vec![
-            Span::styled(group_label, Style::default().fg(Color::Cyan)),
-            Span::styled(cmd.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Span::styled(if cmd.args.is_empty() { String::new() } else { format!(" {}", cmd.args) }, Style::default().fg(Color::DarkGray)),
-            warn_indicator,
-        ]))
-    }).collect();
+        let items: Vec<ListItem> = group.commands.iter().enumerate().map(|(j, cmd)| {
+            let is_selected = is_active && j == state.cmd_idx;
+            let prefix = if is_selected { "▶ " } else { "  " };
+            let warn = if cmd.needs_confirm { " !" } else { "" };
 
-    let title = if state.filter_mode {
-        format!(" Commands [/{}] ", state.filter)
-    } else if !state.filter.is_empty() {
-        format!(" Commands ({}) [filter: {}] ", items.len(), state.filter)
-    } else {
-        format!(" Commands ({}) ", items.len())
-    };
+            let style = if is_selected {
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+            } else if is_active {
+                Style::default().fg(Color::White)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
 
-    let mut ls = state.list_state.clone();
-    let list = List::new(items)
-        .block(Block::default().title(title).borders(Borders::ALL))
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
-        .highlight_symbol("▶ ");
-    frame.render_stateful_widget(list, chunks[1], &mut ls);
+            ListItem::new(Line::from(vec![
+                Span::styled(prefix, if is_selected { Style::default().fg(group.color) } else { Style::default() }),
+                Span::styled(cmd.short_desc, style),
+                Span::styled(warn, Style::default().fg(Color::Yellow)),
+            ]))
+        }).collect();
 
-    // Detail panel for selected command
-    if let Some(cmd) = state.selected() {
-        let mut detail_lines = vec![
-            Line::from(vec![
-                Span::styled("  Command: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("sentinel {} {}", cmd.name, cmd.args), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            ]),
-            Line::raw(""),
-            Line::from(vec![
-                Span::styled("  ", Style::default()),
-                Span::styled(cmd.desc, Style::default().fg(Color::White)),
-            ]),
-        ];
-
-        if !cmd.warning.is_empty() {
-            detail_lines.push(Line::raw(""));
-            detail_lines.push(Line::from(vec![
-                Span::styled("  Warning: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                Span::styled(cmd.warning, Style::default().fg(Color::Yellow)),
-            ]));
-        }
-
-        let detail = Paragraph::new(detail_lines)
-            .wrap(Wrap { trim: false })
-            .block(Block::default().title(" Details ").borders(Borders::ALL));
-        frame.render_widget(detail, chunks[2]);
+        let list = List::new(items).block(block);
+        frame.render_widget(list, grid_areas[i]);
     }
 
-    // Footer
-    let footer = if state.filter_mode {
+    // ── Detail panel ──
+    let cmd = state.current_cmd();
+    let group = state.current_group();
+    let mut lines = vec![
         Line::from(vec![
-            Span::styled(" /", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled(&state.filter, Style::default().fg(Color::White)),
-            Span::styled("_", Style::default().fg(Color::Yellow)),
-            Span::styled("  (Enter to confirm, Esc to cancel)", Style::default().fg(Color::DarkGray)),
-        ])
-    } else {
+            Span::styled("  $ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("sentinel {}", state.cmd_string()), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::raw(""),
         Line::from(vec![
-            Span::styled(" ↑↓", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" navigate  "),
-            Span::styled("Enter", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" run  "),
-            Span::styled("/", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" search  "),
-            Span::styled("c", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" clear  "),
-            Span::styled("q", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" quit"),
-        ])
-    };
-    frame.render_widget(Paragraph::new(footer), chunks[3]);
+            Span::styled("  ", Style::default()),
+            Span::styled(cmd.desc, Style::default().fg(Color::White)),
+        ]),
+    ];
 
-    // Confirm dialog
+    if !cmd.warning.is_empty() {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(vec![
+            Span::styled("  Warning: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(cmd.warning, Style::default().fg(Color::Yellow)),
+        ]));
+    }
+
+    let detail = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .block(Block::default()
+            .title(format!(" {} > {} ", group.name, cmd.short_desc))
+            .title_style(Style::default().fg(group.color))
+            .borders(Borders::ALL));
+    frame.render_widget(detail, main_chunks[2]);
+
+    // ── Footer ──
+    let footer = Paragraph::new(Line::from(vec![
+        Span::styled(" ←→", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" group  "),
+        Span::styled("↑↓", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" cmd  "),
+        Span::styled("Enter", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" run  "),
+        Span::styled("1-6", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" jump  "),
+        Span::styled("q", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" quit"),
+    ]));
+    frame.render_widget(footer, main_chunks[3]);
+
+    // ── Confirm popup ──
     if state.show_confirm {
         let area = frame.area();
-        let w = 50.min(area.width - 4);
+        let w = 55.min(area.width - 4);
         let h = 7;
         let popup = Rect::new((area.width - w) / 2, (area.height - h) / 2, w, h);
         frame.render_widget(Clear, popup);
-        let confirm = Paragraph::new(vec![
+        frame.render_widget(Paragraph::new(vec![
             Line::raw(""),
-            Line::styled("  This action may modify files.", Style::default().fg(Color::Yellow)),
+            Line::styled("  This action may modify or move files.", Style::default().fg(Color::Yellow)),
             Line::raw(""),
             Line::from(vec![
-                Span::styled("  Press ", Style::default().fg(Color::White)),
+                Span::styled("  Press ", Style::default()),
                 Span::styled("y", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                Span::styled(" to confirm, any other key to cancel", Style::default().fg(Color::White)),
+                Span::styled(" to confirm, any other key to cancel", Style::default()),
             ]),
-        ]).block(Block::default().title(" Confirm? ").borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow)));
-        frame.render_widget(confirm, popup);
+        ]).block(Block::default().title(" Confirm? ").borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow))), popup);
     }
 }
