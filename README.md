@@ -2,7 +2,7 @@
 
 Lightweight file access monitor that protects sensitive files from AI coding agents.
 
-Watches for `.env`, API keys, SSH keys, crypto wallets, and other secrets being accessed by tools like OpenClaw, Cursor, or Copilot. Logs everything, alerts in real-time, and can block access via agent hooks.
+Detects and alerts when `.env`, API keys, SSH keys, crypto wallets, or credentials are accessed by tools like OpenClaw, Cursor, or Copilot.
 
 ## Install
 
@@ -10,66 +10,58 @@ Watches for `.env`, API keys, SSH keys, crypto wallets, and other secrets being 
 cargo install --path .
 ```
 
-Or download the binary from [Releases](https://github.com/Supawitk/sentinel-guard/releases).
+Or download from [Releases](https://github.com/Supawitk/sentinel-guard/releases).
+
+## Usage
+
+Run `sentinel` to open the interactive grid launcher, or use commands directly:
+
+```
+┌─ Setup ──────┬─ Scan ────────┬─ Monitor ─────┐
+│ init         │ scan .        │ watch .       │
+│ check        │ scan . --deep │ agents        │
+├─ Integrity ──┼─ Protect ─────┼─ Report ──────┤
+│ baseline .   │ honeypot .    │ dashboard     │
+│ verify .     │ auto-vault .  │ log           │
+│              │ vault list    │ stats         │
+│              │               │ report -o x   │
+│              │               │ cleanup       │
+└──────────────┴───────────────┴───────────────┘
+```
 
 ## Commands
 
-### Setup
-```bash
-sentinel init                    # Generate config file
-sentinel check                   # Verify installation
-```
+| Command | Description |
+|---------|-------------|
+| `sentinel` | Interactive grid launcher |
+| `sentinel scan . --deep` | Find sensitive files + secrets in content |
+| `sentinel watch .` | Real-time monitoring with AI agent detection |
+| `sentinel agents` | Show running AI agents (Claude, Cursor, Copilot...) |
+| `sentinel dashboard` | Interactive TUI with live events and alerts |
+| `sentinel honeypot .` | Plant fake .env/wallet/key decoy files |
+| `sentinel auto-vault .` | Quarantine all sensitive files to vault |
+| `sentinel baseline .` | Hash sensitive files for integrity checks |
+| `sentinel verify .` | Detect tampering since baseline |
+| `sentinel skill-scan .` | Scan AI agent skills for malicious patterns |
+| `sentinel report . -o r.csv` | Export findings to CSV |
+| `sentinel init` | Generate config |
+| `sentinel check` | Verify installation |
 
-### Scanning
-```bash
-sentinel scan .                  # Find sensitive files
-sentinel scan . --deep           # + check file contents for secrets
-sentinel skill-scan .            # Scan AI agent skills for malicious patterns
-sentinel skill-scan --file X.md  # Scan a specific skill file
-```
+## What It Detects
 
-### Monitoring
-```bash
-sentinel watch .                 # Real-time file access monitoring
-sentinel hook                    # Run as AI agent PreToolUse hook (stdin/stdout JSON)
-```
+**Sensitive files** — `.env`, SSH keys, certificates, AWS/GCloud configs, crypto wallets, OpenClaw secrets, package manager tokens
 
-### Integrity
-```bash
-sentinel baseline .              # Hash sensitive files
-sentinel verify .                # Check for changes since baseline
-```
+**Secrets in code** — API keys (AWS, OpenAI, Anthropic, GitHub, Slack, Stripe), private keys, database URLs, seed phrases
 
-### Reporting
-```bash
-sentinel log                     # View activity log
-sentinel log --sensitive         # Sensitive events only
-sentinel stats                   # Event statistics
-sentinel dashboard               # Interactive TUI dashboard
-sentinel report . -o report.csv  # Export to CSV
-sentinel report . -t log -o x.csv  # Export activity log
-```
+**Malicious AI skills** — data exfiltration, RCE, credential harvesting, persistence, browser data theft
 
-### Protection
-```bash
-sentinel agents                  # Show running AI agents (Claude, Cursor, Copilot...)
-sentinel honeypot .              # Plant fake .env/wallet/key decoy files
-sentinel honeypot . --remove     # Remove planted honeypots
-sentinel vault <file>            # Quarantine a sensitive file
-sentinel vault list              # Show vault contents
-sentinel vault-restore <name>    # Restore from vault
-sentinel auto-vault .            # Auto-quarantine all sensitive files
-```
-
-### Maintenance
-```bash
-sentinel cleanup --days 7        # Remove old log entries
-sentinel check                   # Verify installation
-```
+**Running AI agents** — Claude Code, Cursor, VS Code/Copilot, OpenClaw, Windsurf, Cody, Aider, Codex, Gemini
 
 ## Config
 
-Generate with `sentinel init`, customize `sentinel.toml`:
+```bash
+sentinel init  # creates sentinel.toml
+```
 
 ```toml
 [watch]
@@ -80,29 +72,16 @@ recursive = true
 sensitive_patterns = ["**/.env", "**/*.pem", "**/id_rsa", "**/wallet.dat"]
 
 [alert]
-mode = "all"                     # "log", "terminal", "all"
-action = "warn"                  # "warn" or "block"
+mode = "all"
+action = "warn"
 desktop_notifications = false
 
-[log]
-db_path = "~/.sentinel-guard/activity.db"
-retention_days = 30
-
-# Optional webhooks
 [[webhooks.endpoints]]
 name = "slack"
 url = "https://hooks.slack.com/services/..."
-format = "slack"                 # "slack", "discord", "generic"
+format = "slack"
 enabled = false
 ```
-
-## What It Detects
-
-**Files:** `.env`, SSH keys, certificates, AWS/GCloud configs, crypto wallets, OpenClaw secrets, package manager configs
-
-**Secrets in code:** API keys (AWS, OpenAI, Anthropic, GitHub, GitLab, Slack, Stripe), private keys, database URLs, crypto wallet keys, seed phrases
-
-**Malicious AI skills:** Data exfiltration commands, RCE patterns, credential harvesting, persistence mechanisms, browser data access
 
 ## Architecture
 
@@ -111,8 +90,8 @@ src/
 ├── core/       Config, database, shared types
 ├── detect/     Scanner, skills, integrity, vault, honeypot
 ├── monitor/    Watcher, rules, agent detection, hooks
-├── output/     Alerts, dashboard, notifications, webhooks, reports
-└── main.rs     18 CLI commands
+├── output/     Launcher, dashboard, alerts, notifications, webhooks
+└── main.rs     CLI entry (18 commands)
 ```
 
 ## License
