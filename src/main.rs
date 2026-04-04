@@ -109,36 +109,9 @@ fn main() -> Result<()> {
     let command = match cli.command {
         Some(cmd) => cmd,
         None => {
-            print_banner();
-            println!("  {}\n", "Commands:".white().bold());
-            println!("  {}   sentinel init              Generate config file", "Setup".cyan());
-            println!("  {}   sentinel check             Verify installation", "     ".cyan());
-            println!("  {} sentinel scan . --deep      Find secrets in files", "Scan ".cyan());
-            println!("  {}   sentinel skill-scan .       Scan AI agent skills", "     ".cyan());
-            println!("  {} sentinel watch .             Real-time monitoring", "Watch".cyan());
-            println!("  {}   sentinel hook               AI agent hook mode", "     ".cyan());
-            println!("  {} sentinel baseline .          Hash sensitive files", "Guard".cyan());
-            println!("  {}   sentinel verify .            Check for changes", "     ".cyan());
-            println!("  {}  sentinel log                 View activity log", "View ".cyan());
-            println!("  {}   sentinel stats               Event statistics", "     ".cyan());
-            println!("  {}   sentinel dashboard            TUI dashboard", "     ".cyan());
-            println!("  {}   sentinel report . -o x.csv   Export report", "     ".cyan());
-            println!("  {} sentinel agents              Show running AI agents", "Shield".cyan());
-            println!("  {}   sentinel honeypot .          Plant decoy files", "      ".cyan());
-            println!("  {}   sentinel vault <file>        Quarantine a file", "      ".cyan());
-            println!("  {}   sentinel auto-vault .        Auto-quarantine all", "      ".cyan());
-            println!();
-            println!("  Run {} for more details on any command.", "sentinel <command> --help".yellow());
-            println!();
-
-            // If launched by double-click, wait for Enter so window doesn't close
-            if atty::is(atty::Stream::Stdin) {
-                print!("  Press Enter to exit...");
-                use std::io::Write;
-                std::io::stdout().flush()?;
-                let mut buf = String::new();
-                std::io::stdin().read_line(&mut buf)?;
-            }
+            // No args = launch interactive dashboard
+            let config = load_config(&cli.config);
+            output::dashboard::run(&config)?;
             return Ok(());
         }
     };

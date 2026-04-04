@@ -1455,7 +1455,7 @@ checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
 
 [[package]]
 name = "sentinel-guard"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "atty",
