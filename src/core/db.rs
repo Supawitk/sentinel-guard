@@ -14,6 +14,8 @@ impl ActivityDb {
             std::fs::create_dir_all(parent)?;
         }
         let conn = Connection::open(db_path)?;
+        // WAL mode allows concurrent reads while another process writes
+        conn.execute_batch("PRAGMA journal_mode=WAL;")?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS activity (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

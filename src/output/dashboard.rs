@@ -59,13 +59,16 @@ impl AppState {
         }
     }
 
-    fn refresh(&mut self, db: &ActivityDb, agent_detector: &mut AgentDetector) {
-        let (t, s, d) = db.get_stats().unwrap_or((0, 0, 0));
-        self.total = t;
-        self.sensitive_count = s;
-        self.today = d;
-        self.recent = db.get_recent(100).unwrap_or_default();
-        self.sensitive = db.get_sensitive_only(50).unwrap_or_default();
+    fn refresh(&mut self, db_path: &std::path::Path, agent_detector: &mut AgentDetector) {
+        // Reopen DB each refresh to see writes from other processes (scan, watch, etc.)
+        if let Ok(db) = ActivityDb::open(db_path) {
+            let (t, s, d) = db.get_stats().unwrap_or((0, 0, 0));
+            self.total = t;
+            self.sensitive_count = s;
+            self.today = d;
+            self.recent = db.get_recent(100).unwrap_or_default();
+            self.sensitive = db.get_sensitive_only(50).unwrap_or_default();
+        }
         self.agents = agent_detector.detect();
     }
 
@@ -97,7 +100,9 @@ impl AppState {
 }
 
 pub fn run(config: &Config) -> Result<()> {
-    let db = ActivityDb::open(&config.db_path())?;
+    let db_path = config.db_path();
+    // Ensure DB exists
+    let _ = ActivityDb::open(&db_path)?;
     let mut agent_detector = AgentDetector::new();
 
     enable_raw_mode()?;
@@ -105,9 +110,9 @@ pub fn run(config: &Config) -> Result<()> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
 
     let mut state = AppState::new();
-    state.refresh(&db, &mut agent_detector);
+    state.refresh(&db_path, &mut agent_detector);
 
-    let result = run_loop(&mut terminal, &db, &mut agent_detector, &mut state);
+    let result = run_loop(&mut terminal, &db_path, &mut agent_detector, &mut state);
 
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
@@ -116,7 +121,7 @@ pub fn run(config: &Config) -> Result<()> {
 
 fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    db: &ActivityDb,
+    db_path: &std::path::Path,
     agent_detector: &mut AgentDetector,
     state: &mut AppState,
 ) -> Result<()> {
@@ -193,7 +198,7 @@ fn run_loop(
                         state.status_msg = "Filter cleared".into();
                     }
                     KeyCode::Char('r') => {
-                        state.refresh(db, agent_detector);
+                        state.refresh(db_path, agent_detector);
                         state.status_msg = "Refreshed".into();
                     }
                     _ => {}
@@ -201,7 +206,7 @@ fn run_loop(
             }
         } else {
             // Auto-refresh on timeout
-            state.refresh(db, agent_detector);
+            state.refresh(db_path, agent_detector);
         }
     }
     Ok(())
